@@ -15,11 +15,9 @@ const GOOGLE_SHEETS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1v
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('AC');
-  const [sheetData, setSheetData] = useState({
-    AC: { stock: 0, price: 'Rp 1.500.000' },
-    'Non-AC': { stock: 0, price: 'Rp 1.000.000' },
-    Lama: { stock: 0, price: 'Rp 800.000' }
-  });
+  
+  // State diawali kosong (tanpa harga/stok bawaan kodingan)
+  const [sheetData, setSheetData] = useState({});
   const [loading, setLoading] = useState(true);
 
   // State Slider Utama Atas
@@ -33,42 +31,65 @@ export default function Home() {
   // State Slider Foto Kamar Spesifik
   const [roomImageIndex, setRoomImageIndex] = useState(0);
 
-  // FETCH DATA REAL-TIME + AUTO-REFRESH TIAP 10 DETIK
+  // FETCH DATA REAL-TIME + ANTI CACHE BROWSER
   useEffect(() => {
-    const fetchSheetData = () => {
+    const fetchSheetData = async () => {
       if (GOOGLE_SHEETS_CSV_URL && !GOOGLE_SHEETS_CSV_URL.includes("PASTE_LINK")) {
-        // Trik Anti-Cache: Menambahkan timestamp unik agar browser selalu ambil data terbaru dari Google Sheets
-        const freshUrl = `${GOOGLE_SHEETS_CSV_URL}&_t=${Date.now()}`;
+        try {
+          // Trik Anti-Cache Maksimal: timestamp + cache: 'no-store'
+          const freshUrl = `${GOOGLE_SHEETS_CSV_URL}&_t=${Date.now()}`;
+          const response = await fetch(freshUrl, { cache: 'no-store' });
+          const csvText = await response.text();
 
-        Papa.parse(freshUrl, {
-          download: true,
-          header: true,
-          complete: (results) => {
-            const parsedData = {};
-            results.data.forEach((row) => {
-              if (row['Tipe Kamar']) {
-                const key = row['Tipe Kamar'].trim();
-                parsedData[key] = {
-                  stock: parseInt(row['Stok']) || 0,
-                  price: row['Harga'] ? row['Harga'].trim() : ''
-                };
+          Papa.parse(csvText, {
+            header: true,
+            skipEmptyLines: 'greedy',
+            transformHeader: (header) => header ? header.trim() : '',
+            complete: (results) => {
+              const parsedData = {};
+              if (results && results.data) {
+                results.data.forEach((row) => {
+                  if (!row) return;
+
+                  // Cari key kolom fleksibel (abaikan huruf besar/kecil & spasi)
+                  const tipeKey = Object.keys(row).find(k => k && k.toLowerCase().includes('tipe kamar'));
+                  const stokKey = Object.keys(row).find(k => k && k.toLowerCase().includes('stok'));
+                  const hargaKey = Object.keys(row).find(k => k && k.toLowerCase().includes('harga'));
+
+                  const rawTipe = tipeKey ? row[tipeKey] : row['Tipe Kamar'];
+                  if (rawTipe) {
+                    const key = rawTipe.trim();
+                    const rawStok = stokKey ? row[stokKey] : row['Stok'];
+                    const rawHarga = hargaKey ? row[hargaKey] : row['Harga'];
+
+                    parsedData[key] = {
+                      stock: parseInt(rawStok, 10) || 0,
+                      price: rawHarga ? rawHarga.trim() : ''
+                    };
+                  }
+                });
               }
-            });
-            setSheetData((prev) => ({ ...prev, ...parsedData }));
-            setLoading(false);
-          },
-          error: () => setLoading(false)
-        });
+
+              if (Object.keys(parsedData).length > 0) {
+                setSheetData(parsedData); // Timpa data dengan data murni dari Google Sheets
+              }
+              setLoading(false);
+            },
+            error: () => setLoading(false)
+          });
+        } catch (err) {
+          setLoading(false);
+        }
       } else {
         setLoading(false);
       }
     };
 
-    // Panggil pertama kali saat komponen dimuat
+    // Panggil pertama kali saat halaman dimuat
     fetchSheetData();
 
-    // Auto-update otomatis tiap 10 detik (Real-time sync)
-    const interval = setInterval(fetchSheetData, 10000);
+    // Auto-update real-time tiap 5 detik
+    const interval = setInterval(fetchSheetData, 5000);
 
     return () => clearInterval(interval);
   }, []);
@@ -94,7 +115,6 @@ export default function Home() {
   const roomDetails = {
     AC: {
       name: 'Kamar AC (BARU)',
-      defaultPrice: 'Rp 1.500.000',
       period: '/ bulan',
       size: '3 x 5 Meter',
       electricityNote: 'Listrik menggunakan token / meteran mandiri (biaya di luar harga sewa).',
@@ -104,7 +124,6 @@ export default function Home() {
     },
     'Non-AC': {
       name: 'Kamar Non-AC (BARU)',
-      defaultPrice: 'Rp 1.000.000',
       period: '/ bulan',
       size: '3 x 5 Meter',
       electricityNote: 'Listrik menggunakan token / meteran mandiri (biaya di luar harga sewa).',
@@ -114,7 +133,6 @@ export default function Home() {
     },
     Lama: {
       name: 'Kamar Tipe Lama',
-      defaultPrice: 'Rp 800.000',
       period: '/ bulan',
       size: '3 x 5 Meter',
       electricityNote: 'Listrik menggunakan token / meteran mandiri (biaya di luar harga sewa).',
@@ -126,9 +144,9 @@ export default function Home() {
 
   const currentRoom = roomDetails[activeTab];
   const currentStock = sheetData[activeTab]?.stock ?? 0;
-  const currentPrice = sheetData[activeTab]?.price || currentRoom.defaultPrice;
+  const currentPrice = sheetData[activeTab]?.price;
 
-  // PERHITUNGAN TOTAL STOK GABUNGAN (AC + Non-AC + Lama)
+  // PERHITUNGAN TOTAL STOK GABUNGAN
   const totalStock = Object.values(sheetData).reduce((acc, curr) => acc + (curr.stock || 0), 0);
 
   useEffect(() => {
@@ -160,7 +178,8 @@ export default function Home() {
   const prevRoomImage = () => setRoomImageIndex((prev) => (prev === 0 ? currentRoom.images.length - 1 : prev - 1));
 
   const handleWhatsApp = () => {
-    const text = `Halo Admin Kost Rosa Ria Rio, saya berminat dengan ${currentRoom.name} (${currentPrice}/bulan). Apakah stok masih tersedia?`;
+    const hargaTeks = currentPrice ? `(${currentPrice}/bulan)` : '';
+    const text = `Halo Admin Kost Rosa Ria Rio, saya berminat dengan ${currentRoom.name} ${hargaTeks}. Apakah stok masih tersedia?`;
     window.open(`https://wa.me/6281294509239?text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -463,10 +482,14 @@ export default function Home() {
                       </span>
                     </div>
 
+                    {/* HARGA DINAMIS (SAAT MEMUAT / SUDAH DAPAT DARI GOOGLE SHEETS) */}
                     <div className="flex items-baseline gap-1.5 mt-1">
-                      {/* HARGA DINAMIS DARI GOOGLE SHEETS */}
-                      <span className="text-2xl sm:text-3xl font-semibold text-[#8C5E3C]">{currentPrice}</span>
-                      <span className="text-stone-400 text-xs sm:text-sm">{currentRoom.period}</span>
+                      <span className="text-2xl sm:text-3xl font-semibold text-[#8C5E3C]">
+                        {loading || !currentPrice ? 'Mengecek harga...' : currentPrice}
+                      </span>
+                      {!loading && currentPrice && (
+                        <span className="text-stone-400 text-xs sm:text-sm">{currentRoom.period}</span>
+                      )}
                     </div>
 
                     {/* BADGE STOK PADA DETAIL KAMAR */}
@@ -496,7 +519,7 @@ export default function Home() {
                       )}
                     </div>
 
-                    {/* INFORMASI LISTRIK (BAHASA HALUS & SOPAN) */}
+                    {/* INFORMASI LISTRIK */}
                     <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 bg-amber-50/80 border border-amber-200/70 rounded-xl text-[11px] sm:text-xs text-amber-900 font-medium">
                       <Zap size={14} className="text-amber-600 shrink-0" />
                       <span>{currentRoom.electricityNote}</span>
@@ -537,7 +560,7 @@ export default function Home() {
 
               </div>
 
-              {/* PERATURAN KOS (DIPINDAHKAN KE ATAS TOMBOL WA) */}
+              {/* PERATURAN KOS */}
               <div className="mt-4 mb-4 p-4 sm:p-5 bg-stone-50/90 border border-stone-200/80 rounded-xl sm:rounded-2xl">
                 <h3 className="text-xs sm:text-sm font-semibold text-stone-900 mb-3 flex items-center gap-2 border-b border-stone-200/60 pb-2">
                   <ShieldAlert size={16} className="text-[#A67B5B]" /> Peraturan Kos
@@ -671,7 +694,7 @@ export default function Home() {
       {/* FLOATING WHATSAPP BUTTON */}
       <a
         href={`https://wa.me/6281294509239?text=${encodeURIComponent(
-          `Halo Admin Kost Rosa Ria Rio, saya berminat dengan ${currentRoom.name} (${currentPrice}/bulan). Apakah stok masih tersedia?`
+          `Halo Admin Kost Rosa Ria Rio, saya berminat dengan ${currentRoom.name} ${currentPrice ? `(${currentPrice}/bulan)` : ''}. Apakah stok masih tersedia?`
         )}`}
         target="_blank" rel="noopener noreferrer"
         className="fixed bottom-5 right-5 sm:bottom-6 sm:right-6 z-40 flex items-center gap-2.5 px-4 py-3 sm:px-4 sm:py-3 bg-[#25D366] hover:bg-[#1EBE57] text-white rounded-full shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 border border-white/20 group cursor-pointer"
