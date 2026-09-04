@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   MapPin, Check, ShieldAlert, MessageCircle, 
   Wind, Shirt, Sparkles, Info, ChevronLeft, ChevronRight, 
-  Volume2, VolumeX, ArrowRight, Maximize2, X, Phone
+  Volume2, VolumeX, ArrowRight, Maximize2, X, Phone,
+  Ruler, Zap
 } from 'lucide-react';
 import Papa from 'papaparse';
 
@@ -14,7 +15,11 @@ const GOOGLE_SHEETS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1v
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('AC');
-  const [stockData, setStockData] = useState({ AC: 0, 'Non-AC': 0 });
+  const [sheetData, setSheetData] = useState({
+    AC: { stock: 0, price: 'Rp 1.500.000' },
+    'Non-AC': { stock: 0, price: 'Rp 1.000.000' },
+    Lama: { stock: 0, price: 'Rp 800.000' }
+  });
   const [loading, setLoading] = useState(true);
 
   // State Slider Utama Atas
@@ -28,30 +33,47 @@ export default function Home() {
   // State Slider Foto Kamar Spesifik
   const [roomImageIndex, setRoomImageIndex] = useState(0);
 
-  // Fetch Stok dari Google Sheets
+  // FETCH DATA REAL-TIME + AUTO-REFRESH TIAP 10 DETIK
   useEffect(() => {
-    if (GOOGLE_SHEETS_CSV_URL && !GOOGLE_SHEETS_CSV_URL.includes("PASTE_LINK")) {
-      Papa.parse(GOOGLE_SHEETS_CSV_URL, {
-        download: true,
-        header: true,
-        complete: (results) => {
-          const parsedStock = {};
-          results.data.forEach((row) => {
-            if (row['Tipe Kamar']) {
-              parsedStock[row['Tipe Kamar'].trim()] = parseInt(row['Stok']) || 0;
-            }
-          });
-          setStockData(parsedStock);
-          setLoading(false);
-        },
-        error: () => setLoading(false)
-      });
-    } else {
-      setLoading(false);
-    }
+    const fetchSheetData = () => {
+      if (GOOGLE_SHEETS_CSV_URL && !GOOGLE_SHEETS_CSV_URL.includes("PASTE_LINK")) {
+        // Trik Anti-Cache: Menambahkan timestamp unik agar browser selalu ambil data terbaru dari Google Sheets
+        const freshUrl = `${GOOGLE_SHEETS_CSV_URL}&_t=${Date.now()}`;
+
+        Papa.parse(freshUrl, {
+          download: true,
+          header: true,
+          complete: (results) => {
+            const parsedData = {};
+            results.data.forEach((row) => {
+              if (row['Tipe Kamar']) {
+                const key = row['Tipe Kamar'].trim();
+                parsedData[key] = {
+                  stock: parseInt(row['Stok']) || 0,
+                  price: row['Harga'] ? row['Harga'].trim() : ''
+                };
+              }
+            });
+            setSheetData((prev) => ({ ...prev, ...parsedData }));
+            setLoading(false);
+          },
+          error: () => setLoading(false)
+        });
+      } else {
+        setLoading(false);
+      }
+    };
+
+    // Panggil pertama kali saat komponen dimuat
+    fetchSheetData();
+
+    // Auto-update otomatis tiap 10 detik (Real-time sync)
+    const interval = setInterval(fetchSheetData, 10000);
+
+    return () => clearInterval(interval);
   }, []);
 
-  // Kunci Scroll Layar Saat Modal Terbuka (UX Improvement)
+  // Kunci Scroll Layar Saat Modal Terbuka
   useEffect(() => {
     if (isVideoModalOpen || isImageModalOpen) {
       document.body.style.overflow = 'hidden';
@@ -63,36 +85,51 @@ export default function Home() {
 
   // Data Slider Utama Atas
   const mediaGallery = [
-    { type: 'video', src: '/video-tour.mp4', title: 'Video Tour Kost' },
-    { type: 'image', src: '/umum.jpg', title: 'Area Bersama & Balkon' },
-    { type: 'image', src: '/luar.jpg', title: 'Area Parkir Luas' },
+    { type: 'image', src: '/luar.webp', title: 'Tampak Depan' },
+    { type: 'image', src: '/umum.webp', title: 'Area Bersama & Balkon' },
+    { type: 'image', src: '/samping.webp', title: 'Tampak Samping' },
   ];
 
   // Detail & Foto Spesifik Masing-masing Kamar
   const roomDetails = {
     AC: {
-      name: 'Kamar AC',
-      price: 'Rp 1.500.000',
+      name: 'Kamar AC (BARU)',
+      defaultPrice: 'Rp 1.500.000',
       period: '/ bulan',
-      images: ['/ac-1.jpg', '/ac-2.jpg', '/ac-4.jpg'],
-      specs: ['AC', 'Kasur', 'Lemari / Storage', 'Jendela', 'Ventilasi', 'Bantal & Guling', 'Wastafel'],
-      bathroom: ['Kamar Mandi Dalam', 'Kloset Jongkok', 'Shower', 'Ember Mandi']
+      size: '3 x 5 Meter',
+      electricityNote: 'Listrik menggunakan token / meteran mandiri (biaya di luar harga sewa).',
+      images: ['/ac-2.webp', '/ac-3.webp', '/ac-1.webp'],
+      specs: ['AC', 'Kasur', 'Lemari / Storage', 'Jendela', 'Ventilasi', 'Bantal & Guling'],
+      bathroom: ['Kamar Mandi Dalam', 'Kloset Jongkok', 'Shower', 'Ember Mandi', 'Wastafel']
     },
     'Non-AC': {
-      name: 'Kamar Non-AC',
-      price: 'Rp 1.000.000',
+      name: 'Kamar Non-AC (BARU)',
+      defaultPrice: 'Rp 1.000.000',
       period: '/ bulan',
-      images: ['/nonac-1.jpg', '/nonac-2.jpg'],
+      size: '3 x 5 Meter',
+      electricityNote: 'Listrik menggunakan token / meteran mandiri (biaya di luar harga sewa).',
+      images: ['/nonac-1.webp', '/nonac-2.webp'],
       specs: ['Kipas Angin', 'Kasur', 'Lemari / Storage', 'Jendela', 'Ventilasi', 'Bantal & Guling', 'Wastafel'],
       bathroom: ['Kamar Mandi Dalam', 'Kloset Jongkok', 'Shower', 'Ember Mandi']
+    },
+    Lama: {
+      name: 'Kamar Tipe Lama',
+      defaultPrice: 'Rp 800.000',
+      period: '/ bulan',
+      size: '3 x 5 Meter',
+      electricityNote: 'Listrik menggunakan token / meteran mandiri (biaya di luar harga sewa).',
+      images: ['/lama-1.webp', '/lama-2.webp'],
+      specs: ['AC', 'Kasur', 'Kursi plastik', 'Jendela', 'Ventilasi'],
+      bathroom: ['Kamar Mandi Dalam', 'Kloset Jongkok', 'Ember Mandi', 'Wastafel dalam kamar']
     }
   };
 
   const currentRoom = roomDetails[activeTab];
-  const currentStock = stockData[activeTab] ?? 0;
+  const currentStock = sheetData[activeTab]?.stock ?? 0;
+  const currentPrice = sheetData[activeTab]?.price || currentRoom.defaultPrice;
 
-  // PERHITUNGAN TOTAL STOK GABUNGAN (AC + Non-AC)
-  const totalStock = Object.values(stockData).reduce((acc, curr) => acc + curr, 0);
+  // PERHITUNGAN TOTAL STOK GABUNGAN (AC + Non-AC + Lama)
+  const totalStock = Object.values(sheetData).reduce((acc, curr) => acc + (curr.stock || 0), 0);
 
   useEffect(() => {
     setRoomImageIndex(0);
@@ -123,7 +160,7 @@ export default function Home() {
   const prevRoomImage = () => setRoomImageIndex((prev) => (prev === 0 ? currentRoom.images.length - 1 : prev - 1));
 
   const handleWhatsApp = () => {
-    const text = `Halo Admin Kost Rosa Ria Rio, saya berminat dengan ${currentRoom.name} (${currentRoom.price}/bulan). Apakah stok masih tersedia?`;
+    const text = `Halo Admin Kost Rosa Ria Rio, saya berminat dengan ${currentRoom.name} (${currentPrice}/bulan). Apakah stok masih tersedia?`;
     window.open(`https://wa.me/6281294509239?text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -245,7 +282,7 @@ export default function Home() {
             </div>
 
             <div className="flex flex-wrap gap-2 pt-3 border-t border-stone-300/60">
-              {['Lingkungan Tenang', 'Parkir Luas', 'Akses Jam Malam', 'Bebas Banjir', 'Kamar Mandi Dalam'].map((tag, i) => (
+              {['Lingkungan Tenang', 'Akses Jam Malam', 'Bebas Banjir', 'Kamar Mandi Dalam'].map((tag, i) => (
                 <span key={i} className="px-3 py-1.5 sm:px-3 sm:py-1.5 bg-white/80 border border-stone-300/80 rounded-full text-[11px] text-stone-700 font-medium shadow-xs">
                   {tag}
                 </span>
@@ -266,7 +303,6 @@ export default function Home() {
                 >
                   {mediaGallery[currentSlide].type === 'video' ? (
                     <div className="relative w-full h-full flex items-center justify-center bg-stone-950 overflow-hidden">
-                      {/* Ambient Blur Background untuk video vertikal */}
                       <video
                         src={mediaGallery[currentSlide].src}
                         autoPlay loop muted playsInline
@@ -350,8 +386,8 @@ export default function Home() {
         {/* SEKSI PILIHAN KAMAR */}
         <div id="pilihan-kamar" className="scroll-mt-6 sm:scroll-mt-8">
           <section className="mb-4 sm:mb-6">
-            <div className="flex p-1 bg-stone-300/60 rounded-full max-w-[240px] sm:max-w-xs mx-auto sm:mx-0">
-              {['AC', 'Non-AC'].map((tab) => (
+            <div className="flex p-1 bg-stone-300/60 rounded-full max-w-[320px] sm:max-w-md mx-auto sm:mx-0">
+              {['AC', 'Non-AC', 'Lama'].map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -417,9 +453,19 @@ export default function Home() {
                 {/* INFO & FASILITAS KAMAR */}
                 <div className="lg:col-span-7 flex flex-col order-2 lg:order-1">
                   <div className="flex flex-col mb-4 sm:mb-6 border-b border-stone-100 pb-4 sm:pb-6">
-                    <h2 className="text-xl sm:text-2xl font-normal text-stone-900">{currentRoom.name}</h2>
+                    
+                    {/* BARIS NAMA KAMAR & UKURAN */}
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <h2 className="text-xl sm:text-2xl font-normal text-stone-900">{currentRoom.name}</h2>
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-stone-100/90 border border-stone-200 rounded-md text-[11px] sm:text-xs font-medium text-stone-700">
+                        <Ruler size={13} className="text-[#8C5E3C]" />
+                        <span>Ukuran {currentRoom.size}</span>
+                      </span>
+                    </div>
+
                     <div className="flex items-baseline gap-1.5 mt-1">
-                      <span className="text-2xl sm:text-3xl font-semibold text-[#8C5E3C]">{currentRoom.price}</span>
+                      {/* HARGA DINAMIS DARI GOOGLE SHEETS */}
+                      <span className="text-2xl sm:text-3xl font-semibold text-[#8C5E3C]">{currentPrice}</span>
                       <span className="text-stone-400 text-xs sm:text-sm">{currentRoom.period}</span>
                     </div>
 
@@ -449,6 +495,13 @@ export default function Home() {
                         </div>
                       )}
                     </div>
+
+                    {/* INFORMASI LISTRIK (BAHASA HALUS & SOPAN) */}
+                    <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 bg-amber-50/80 border border-amber-200/70 rounded-xl text-[11px] sm:text-xs text-amber-900 font-medium">
+                      <Zap size={14} className="text-amber-600 shrink-0" />
+                      <span>{currentRoom.electricityNote}</span>
+                    </div>
+
                   </div>
 
                   <div className="grid grid-cols-2 gap-4 sm:gap-6 mb-2">
@@ -484,10 +537,31 @@ export default function Home() {
 
               </div>
 
+              {/* PERATURAN KOS (DIPINDAHKAN KE ATAS TOMBOL WA) */}
+              <div className="mt-4 mb-4 p-4 sm:p-5 bg-stone-50/90 border border-stone-200/80 rounded-xl sm:rounded-2xl">
+                <h3 className="text-xs sm:text-sm font-semibold text-stone-900 mb-3 flex items-center gap-2 border-b border-stone-200/60 pb-2">
+                  <ShieldAlert size={16} className="text-[#A67B5B]" /> Peraturan Kos
+                </h3>
+                <ul className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4 text-[11px] sm:text-xs text-stone-600">
+                  <li className="flex items-start gap-2 leading-relaxed">
+                    <Info size={14} className="text-[#A67B5B] shrink-0 mt-0.5" />
+                    <span>Maksimal 1 orang/kamar (Bukan pasutri & dilarang membawa anak).</span>
+                  </li>
+                  <li className="flex items-start gap-2 leading-relaxed">
+                    <Info size={14} className="text-[#A67B5B] shrink-0 mt-0.5" />
+                    <span>Ada jam malam penghuni & tamu (Tamu menginap harap mengabari dan memberi info).</span>
+                  </li>
+                  <li className="flex items-start gap-2 leading-relaxed">
+                    <Info size={14} className="text-[#A67B5B] shrink-0 mt-0.5" />
+                    <span>Dilarang membawa hewan peliharaan & dilarang merokok di kamar.</span>
+                  </li>
+                </ul>
+              </div>
+
               {/* BUTTON WHATSAPP FULL WIDTH */}
               <button
                 onClick={handleWhatsApp} disabled={loading || currentStock === 0}
-                className={`w-full py-3 sm:py-3.5 rounded-xl sm:rounded-2xl font-medium text-xs sm:text-base flex items-center justify-center gap-2 transition mt-2 ${
+                className={`w-full py-3 sm:py-3.5 rounded-xl sm:rounded-2xl font-medium text-xs sm:text-base flex items-center justify-center gap-2 transition ${
                   loading
                     ? 'bg-stone-200 text-stone-400 cursor-wait'
                     : currentStock > 0 
@@ -502,42 +576,93 @@ export default function Home() {
           </AnimatePresence>
         </div>
 
-        {/* INFORMASI UMUM & PERATURAN */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-12 sm:mb-16">
-          <div className="bg-white/95 backdrop-blur-md border border-stone-200/90 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-md flex flex-col justify-between">
-            <h3 className="text-sm sm:text-base font-medium text-stone-900 mb-3 sm:mb-3 flex items-center gap-2 border-b border-stone-100 pb-2.5 sm:pb-3">
-              <Shirt size={16} className="text-[#A67B5B]" /> Fasilitas Umum & Parkir
-            </h3>
-            <div className="space-y-3 sm:space-y-3 text-xs sm:text-sm text-stone-600">
-              <div>
-                <p className="font-medium text-stone-800">Area Bersama:</p>
-                <p className="text-stone-500 mt-1 leading-relaxed">R. Cuci (Mesin Cuci), R. Tamu, R. Jemur, R. Santai, Balkon.</p>
-              </div>
-              <div>
-                <p className="font-medium text-stone-800">Parkir:</p>
-                <p className="text-stone-500 mt-1 leading-relaxed">Parkir Mobil, Motor, dan Sepeda.</p>
-              </div>
+        {/* INFORMASI FASILITAS UMUM & PARKIR (WITH PHOTO CARDS) */}
+        <div className="mb-12 sm:mb-16">
+          <div className="bg-white/95 backdrop-blur-md border border-stone-200/90 rounded-2xl sm:rounded-3xl p-5 sm:p-8 shadow-md">
+            
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3 sm:pb-4 mb-5">
+              <h3 className="text-base sm:text-lg font-medium text-stone-900 flex items-center gap-2">
+                <Shirt size={18} className="text-[#A67B5B]" /> Fasilitas Umum & Area Bersama
+              </h3>
+              <span className="text-[10px] sm:text-xs text-[#8C5E3C] font-semibold bg-[#8C5E3C]/10 px-2.5 py-1 rounded-full">
+                Bisa Dipakai Bersama
+              </span>
             </div>
-          </div>
 
-          <div className="bg-white/95 backdrop-blur-md border border-stone-200/90 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-md flex flex-col justify-between">
-            <h3 className="text-sm sm:text-base font-medium text-stone-900 mb-3 sm:mb-3 flex items-center gap-2 border-b border-stone-100 pb-2.5 sm:pb-3">
-              <ShieldAlert size={16} className="text-[#A67B5B]" /> Peraturan Kos
-            </h3>
-            <ul className="space-y-2.5 sm:space-y-2.5 text-xs sm:text-sm text-stone-600">
-              <li className="flex items-start gap-2.5 leading-relaxed">
-                <Info size={15} className="text-[#A67B5B] shrink-0 mt-0.5" />
-                <span>Maksimal 1 orang/kamar (Bukan untuk pasutri & dilarang bawa anak).</span>
-              </li>
-              <li className="flex items-start gap-2.5 leading-relaxed">
-                <Info size={15} className="text-[#A67B5B] shrink-0 mt-0.5" />
-                <span>Ada jam malam penghuni & tamu (Tamu menginap dikenakan biaya).</span>
-              </li>
-              <li className="flex items-start gap-2.5 leading-relaxed">
-                <Info size={15} className="text-[#A67B5B] shrink-0 mt-0.5" />
-                <span>Dilarang membawa hewan peliharaan & dilarang merokok di dalam kamar.</span>
-              </li>
-            </ul>
+            {/* GRID FOTO FASILITAS UMUM */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5 mb-5">
+              
+              {/* KARTU 1: DAPUR & WASTAFEL */}
+              <div className="bg-stone-50 border border-stone-200/80 rounded-2xl overflow-hidden shadow-xs hover:shadow-md transition-all">
+                <div className="relative w-full h-44 sm:h-48 bg-stone-200">
+                  <img 
+                    src="/dapur.webp" 
+                    alt="Dapur Umum & Wastafel" 
+                    onError={handleImageError}
+                    className="w-full h-full object-cover" 
+                  />
+                  <span className="absolute top-2.5 left-2.5 bg-black/60 backdrop-blur-md text-white text-[10px] font-medium px-2 py-0.5 rounded-md">
+                    Dapur & Wastafel
+                  </span>
+                </div>
+                <div className="p-3.5">
+                  <h4 className="font-semibold text-stone-800 text-xs sm:text-sm">Wastafel & Dapur Umum</h4>
+                  <p className="text-stone-500 text-[11px] sm:text-xs mt-1 leading-relaxed">
+                    Dilengkapi wastafel cuci piring & area dapur bersih untuk memasak harian.
+                  </p>
+                </div>
+              </div>
+
+              {/* KARTU 2: KURSI & MEJA BERSAMA */}
+              <div className="bg-stone-50 border border-stone-200/80 rounded-2xl overflow-hidden shadow-xs hover:shadow-md transition-all">
+                <div className="relative w-full h-44 sm:h-48 bg-stone-200">
+                  <img 
+                    src="/kursi.webp" 
+                    alt="Kursi & Meja Bersama" 
+                    onError={handleImageError}
+                    className="w-full h-full object-cover" 
+                  />
+                  <span className="absolute top-2.5 left-2.5 bg-black/60 backdrop-blur-md text-white text-[10px] font-medium px-2 py-0.5 rounded-md">
+                    Ruang Bersama
+                  </span>
+                </div>
+                <div className="p-3.5">
+                  <h4 className="font-semibold text-stone-800 text-xs sm:text-sm">Kursi & Meja Bersama</h4>
+                  <p className="text-stone-500 text-[11px] sm:text-xs mt-1 leading-relaxed">
+                    Area santai & ruang tamu dengan meja-kursi nyaman untuk kumpul atau makan.
+                  </p>
+                </div>
+              </div>
+
+              {/* KARTU 3: MESIN CUCI & JEMURAN */}
+              <div className="bg-stone-50 border border-stone-200/80 rounded-2xl overflow-hidden shadow-xs hover:shadow-md transition-all">
+                <div className="relative w-full h-44 sm:h-48 bg-stone-200">
+                  <img 
+                    src="/cuci.webp" 
+                    alt="Mesin Cuci & Jemuran" 
+                    onError={handleImageError}
+                    className="w-full h-full object-cover" 
+                  />
+                  <span className="absolute top-2.5 left-2.5 bg-black/60 backdrop-blur-md text-white text-[10px] font-medium px-2 py-0.5 rounded-md">
+                    Area Cuci & Jemur
+                  </span>
+                </div>
+                <div className="p-3.5">
+                  <h4 className="font-semibold text-stone-800 text-xs sm:text-sm">Mesin Cuci & Gantung Jemuran</h4>
+                  <p className="text-stone-500 text-[11px] sm:text-xs mt-1 leading-relaxed">
+                    Fasilitas mesin cuci siap pakai & area balkon jemuran baju yang luas.
+                  </p>
+                </div>
+              </div>
+
+            </div>
+
+            {/* RINGKASAN AREA PARKIR */}
+            <div className="p-3.5 sm:p-4 bg-stone-100/70 border border-stone-200/60 rounded-xl text-xs text-stone-600 flex items-center gap-2">
+              <span className="font-semibold text-stone-800 shrink-0">Parkir Kendaraan:</span>
+              <span className="text-stone-500">Tersedia area parkir aman untuk Motor, dan Sepeda.</span>
+            </div>
+
           </div>
         </div>
 
@@ -546,7 +671,7 @@ export default function Home() {
       {/* FLOATING WHATSAPP BUTTON */}
       <a
         href={`https://wa.me/6281294509239?text=${encodeURIComponent(
-          `Halo Admin Kost Rosa Ria Rio, saya berminat dengan ${currentRoom.name} (${currentRoom.price}/bulan). Apakah stok masih tersedia?`
+          `Halo Admin Kost Rosa Ria Rio, saya berminat dengan ${currentRoom.name} (${currentPrice}/bulan). Apakah stok masih tersedia?`
         )}`}
         target="_blank" rel="noopener noreferrer"
         className="fixed bottom-5 right-5 sm:bottom-6 sm:right-6 z-40 flex items-center gap-2.5 px-4 py-3 sm:px-4 sm:py-3 bg-[#25D366] hover:bg-[#1EBE57] text-white rounded-full shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105 border border-white/20 group cursor-pointer"
