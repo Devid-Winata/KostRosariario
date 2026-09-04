@@ -282,7 +282,7 @@ export default function Home() {
             </div>
 
             <div className="flex flex-wrap gap-2 pt-3 border-t border-stone-300/60">
-              {['Lingkungan Tenang', 'Akses Jam Malam', 'Bebas Banjir', 'Kamar Mandi Dalam'].map((tag, i) => (
+              {['Lingkungan Tenang', 'Bebas Banjir', 'Kamar Mandi Dalam'].map((tag, i) => (
                 <span key={i} className="px-3 py-1.5 sm:px-3 sm:py-1.5 bg-white/80 border border-stone-300/80 rounded-full text-[11px] text-stone-700 font-medium shadow-xs">
                   {tag}
                 </span>
