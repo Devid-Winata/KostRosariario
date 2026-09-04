@@ -10,13 +10,13 @@ import {
 } from 'lucide-react';
 import Papa from 'papaparse';
 
-// ⚠️ LINK CSV GOOGLE SHEETS
-const GOOGLE_SHEETS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRenNFu1mmE5ur840SK5NZBbj_lFtBtTjLlIILqybvQXn4YZg1JPAkKQ0mZgUQ7NOe1aQOoo_vxol80/pub?output=csv";
+// ⚠️ LINK REAL-TIME (Mengambil data live tanpa delay cache Google)
+const GOOGLE_SHEETS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRenNFu1mmE5ur840SK5NZBbj_lFtBtTjLlIILqybvQXn4YZg1JPAkKQ0mZgUQ7NOe1aQOoo_vxol80/pub?gid=0&single=true&output=csv";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('AC');
   
-  // 1. STATE DIAWALI KOSONG (Tanpa nilai default harga/stok)
+  // State diawali kosong (tanpa nilai default harga/stok)
   const [sheetData, setSheetData] = useState({});
   const [loading, setLoading] = useState(true);
 
@@ -31,63 +31,94 @@ export default function Home() {
   // State Slider Foto Kamar Spesifik
   const [roomImageIndex, setRoomImageIndex] = useState(0);
 
-  // FETCH DATA REAL-TIME + ANTI-CACHE
+  // FETCH DATA REAL-TIME + ANTI FLICKER & PROTEKSI RATE LIMIT
   useEffect(() => {
-    const fetchSheetData = async () => {
-      if (GOOGLE_SHEETS_CSV_URL && !GOOGLE_SHEETS_CSV_URL.includes("PASTE_LINK")) {
-        try {
-          // Pakai timestamp + cache: 'no-store' agar selalu ambil data ter-update dari Sheets
-          const freshUrl = `${GOOGLE_SHEETS_CSV_URL}&_t=${Date.now()}`;
-          const response = await fetch(freshUrl, { cache: 'no-store' });
-          const csvText = await response.text();
+    let isMounted = true;
 
-          Papa.parse(csvText, {
-            header: true,
-            skipEmptyLines: 'greedy',
-            transformHeader: (header) => header ? header.trim() : '',
-            complete: (results) => {
-              const parsedData = {};
-              if (results && results.data) {
-                results.data.forEach((row) => {
-                  if (!row) return;
+    const fetchSheetData = async (isInitial = false) => {
+      if (!GOOGLE_SHEETS_CSV_URL || GOOGLE_SHEETS_CSV_URL.includes("PASTE_LINK")) {
+        if (isMounted) setLoading(false);
+        return;
+      }
 
-                  const tipeKey = Object.keys(row).find(k => k && k.toLowerCase().includes('tipe kamar'));
-                  const stokKey = Object.keys(row).find(k => k && k.toLowerCase().includes('stok'));
-                  const hargaKey = Object.keys(row).find(k => k && k.toLowerCase().includes('harga'));
+      try {
+        const freshUrl = `${GOOGLE_SHEETS_CSV_URL}&_t=${Date.now()}`;
+        const response = await fetch(freshUrl, { cache: 'no-store' });
 
-                  const rawTipe = tipeKey ? row[tipeKey] : row['Tipe Kamar'];
-                  if (rawTipe) {
-                    const key = rawTipe.trim();
-                    const rawStok = stokKey ? row[stokKey] : row['Stok'];
-                    const rawHarga = hargaKey ? row[hargaKey] : row['Harga'];
-
-                    parsedData[key] = {
-                      stock: parseInt(rawStok, 10) || 0,
-                      price: rawHarga ? rawHarga.trim() : ''
-                    };
-                  }
-                });
-              }
-
-              if (Object.keys(parsedData).length > 0) {
-                setSheetData(parsedData);
-              }
-              setLoading(false);
-            },
-            error: () => setLoading(false)
-          });
-        } catch (err) {
-          setLoading(false);
+        if (!response.ok) {
+          if (isInitial && isMounted) setLoading(false);
+          return;
         }
-      } else {
-        setLoading(false);
+
+        const csvText = await response.text();
+
+        // Mencegah error jika Google mengirimkan halaman HTML login / limit sementara
+        if (csvText.trim().startsWith('<') || csvText.includes('<!DOCTYPE html>')) {
+          if (isInitial && isMounted) setLoading(false);
+          return;
+        }
+
+        Papa.parse(csvText, {
+          header: true,
+          skipEmptyLines: 'greedy',
+          transformHeader: (header) => (header ? header.trim().replace(/^"|"$/g, '') : ''),
+          complete: (results) => {
+            if (!isMounted) return;
+
+            const parsedData = {};
+            if (results && results.data && Array.isArray(results.data)) {
+              results.data.forEach((row) => {
+                if (!row) return;
+
+                const tipeKey = Object.keys(row).find(
+                  (k) => k && k.toLowerCase().includes('tipe kamar')
+                );
+                const stokKey = Object.keys(row).find(
+                  (k) => k && k.toLowerCase().includes('stok')
+                );
+                const hargaKey = Object.keys(row).find(
+                  (k) => k && k.toLowerCase().includes('harga')
+                );
+
+                const rawTipe = tipeKey ? row[tipeKey] : row['Tipe Kamar'];
+                if (rawTipe) {
+                  const key = String(rawTipe).trim().replace(/^"|"$/g, '');
+                  const rawStok = stokKey ? row[stokKey] : row['Stok'];
+                  const rawHarga = hargaKey ? row[hargaKey] : row['Harga'];
+
+                  const cleanStok = typeof rawStok === 'string' ? rawStok.replace(/"/g, '').trim() : rawStok;
+                  const cleanHarga = typeof rawHarga === 'string' ? rawHarga.replace(/"/g, '').trim() : rawHarga;
+
+                  parsedData[key] = {
+                    stock: parseInt(cleanStok, 10) || 0,
+                    price: cleanHarga || '',
+                  };
+                }
+              });
+            }
+
+            // HANYA UPDATE JIKA DATA VALID TERBACA (Mencegah data tereset ke kosong)
+            if (Object.keys(parsedData).length > 0) {
+              setSheetData(parsedData);
+            }
+            if (isMounted) setLoading(false);
+          },
+          error: () => {
+            if (isInitial && isMounted) setLoading(false);
+          },
+        });
+      } catch (err) {
+        if (isInitial && isMounted) setLoading(false);
       }
     };
 
-    fetchSheetData();
-    const interval = setInterval(fetchSheetData, 5000); // Auto update tiap 5 detik
+    fetchSheetData(true);
+    const interval = setInterval(() => fetchSheetData(false), 10000); // Fetch tiap 10 detik
 
-    return () => clearInterval(interval);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
   // Kunci Scroll Layar Saat Modal Terbuka
@@ -107,7 +138,7 @@ export default function Home() {
     { type: 'image', src: '/samping.webp', title: 'Tampak Samping' },
   ];
 
-  // 2. DETAIL KAMAR (Property defaultPrice SUDAH DIHAPUS)
+  // DETAIL KAMAR
   const roomDetails = {
     AC: {
       name: 'Kamar AC (BARU)',
@@ -140,8 +171,6 @@ export default function Home() {
 
   const currentRoom = roomDetails[activeTab];
   const currentStock = sheetData[activeTab]?.stock ?? 0;
-  
-  // 3. AMBIL HARGA MURNI DARI SHEETDATA (TANPA FALLBACK HARGA DEFAULT)
   const currentPrice = sheetData[activeTab]?.price;
 
   // PERHITUNGAN TOTAL STOK GABUNGAN
@@ -480,7 +509,7 @@ export default function Home() {
                       </span>
                     </div>
 
-                    {/* TAMPILAN HARGA DENGAN STATUS MEMUAT JUGA */}
+                    {/* TAMPILAN HARGA */}
                     <div className="flex items-baseline gap-1.5 mt-1">
                       <span className="text-2xl sm:text-3xl font-semibold text-[#8C5E3C]">
                         {loading || !currentPrice ? 'Mengecek harga...' : currentPrice}
