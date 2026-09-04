@@ -16,7 +16,7 @@ const GOOGLE_SHEETS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1v
 export default function Home() {
   const [activeTab, setActiveTab] = useState('AC');
   
-  // State diawali kosong (tanpa harga/stok bawaan kodingan)
+  // 1. STATE DIAWALI KOSONG (Tanpa nilai default harga/stok)
   const [sheetData, setSheetData] = useState({});
   const [loading, setLoading] = useState(true);
 
@@ -31,12 +31,12 @@ export default function Home() {
   // State Slider Foto Kamar Spesifik
   const [roomImageIndex, setRoomImageIndex] = useState(0);
 
-  // FETCH DATA REAL-TIME + ANTI CACHE BROWSER
+  // FETCH DATA REAL-TIME + ANTI-CACHE
   useEffect(() => {
     const fetchSheetData = async () => {
       if (GOOGLE_SHEETS_CSV_URL && !GOOGLE_SHEETS_CSV_URL.includes("PASTE_LINK")) {
         try {
-          // Trik Anti-Cache Maksimal: timestamp + cache: 'no-store'
+          // Pakai timestamp + cache: 'no-store' agar selalu ambil data ter-update dari Sheets
           const freshUrl = `${GOOGLE_SHEETS_CSV_URL}&_t=${Date.now()}`;
           const response = await fetch(freshUrl, { cache: 'no-store' });
           const csvText = await response.text();
@@ -51,7 +51,6 @@ export default function Home() {
                 results.data.forEach((row) => {
                   if (!row) return;
 
-                  // Cari key kolom fleksibel (abaikan huruf besar/kecil & spasi)
                   const tipeKey = Object.keys(row).find(k => k && k.toLowerCase().includes('tipe kamar'));
                   const stokKey = Object.keys(row).find(k => k && k.toLowerCase().includes('stok'));
                   const hargaKey = Object.keys(row).find(k => k && k.toLowerCase().includes('harga'));
@@ -71,7 +70,7 @@ export default function Home() {
               }
 
               if (Object.keys(parsedData).length > 0) {
-                setSheetData(parsedData); // Timpa data dengan data murni dari Google Sheets
+                setSheetData(parsedData);
               }
               setLoading(false);
             },
@@ -85,11 +84,8 @@ export default function Home() {
       }
     };
 
-    // Panggil pertama kali saat halaman dimuat
     fetchSheetData();
-
-    // Auto-update real-time tiap 5 detik
-    const interval = setInterval(fetchSheetData, 5000);
+    const interval = setInterval(fetchSheetData, 5000); // Auto update tiap 5 detik
 
     return () => clearInterval(interval);
   }, []);
@@ -111,7 +107,7 @@ export default function Home() {
     { type: 'image', src: '/samping.webp', title: 'Tampak Samping' },
   ];
 
-  // Detail & Foto Spesifik Masing-masing Kamar
+  // 2. DETAIL KAMAR (Property defaultPrice SUDAH DIHAPUS)
   const roomDetails = {
     AC: {
       name: 'Kamar AC (BARU)',
@@ -144,6 +140,8 @@ export default function Home() {
 
   const currentRoom = roomDetails[activeTab];
   const currentStock = sheetData[activeTab]?.stock ?? 0;
+  
+  // 3. AMBIL HARGA MURNI DARI SHEETDATA (TANPA FALLBACK HARGA DEFAULT)
   const currentPrice = sheetData[activeTab]?.price;
 
   // PERHITUNGAN TOTAL STOK GABUNGAN
@@ -178,8 +176,8 @@ export default function Home() {
   const prevRoomImage = () => setRoomImageIndex((prev) => (prev === 0 ? currentRoom.images.length - 1 : prev - 1));
 
   const handleWhatsApp = () => {
-    const hargaTeks = currentPrice ? `(${currentPrice}/bulan)` : '';
-    const text = `Halo Admin Kost Rosa Ria Rio, saya berminat dengan ${currentRoom.name} ${hargaTeks}. Apakah stok masih tersedia?`;
+    const hargaFormat = currentPrice ? `(${currentPrice}/bulan)` : '';
+    const text = `Halo Admin Kost Rosa Ria Rio, saya berminat dengan ${currentRoom.name} ${hargaFormat}. Apakah stok masih tersedia?`;
     window.open(`https://wa.me/6281294509239?text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -482,7 +480,7 @@ export default function Home() {
                       </span>
                     </div>
 
-                    {/* HARGA DINAMIS (SAAT MEMUAT / SUDAH DAPAT DARI GOOGLE SHEETS) */}
+                    {/* TAMPILAN HARGA DENGAN STATUS MEMUAT JUGA */}
                     <div className="flex items-baseline gap-1.5 mt-1">
                       <span className="text-2xl sm:text-3xl font-semibold text-[#8C5E3C]">
                         {loading || !currentPrice ? 'Mengecek harga...' : currentPrice}
@@ -599,7 +597,7 @@ export default function Home() {
           </AnimatePresence>
         </div>
 
-        {/* INFORMASI FASILITAS UMUM & PARKIR (WITH PHOTO CARDS) */}
+        {/* INFORMASI FASILITAS UMUM & PARKIR */}
         <div className="mb-12 sm:mb-16">
           <div className="bg-white/95 backdrop-blur-md border border-stone-200/90 rounded-2xl sm:rounded-3xl p-5 sm:p-8 shadow-md">
             
@@ -615,7 +613,6 @@ export default function Home() {
             {/* GRID FOTO FASILITAS UMUM */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5 mb-5">
               
-              {/* KARTU 1: DAPUR & WASTAFEL */}
               <div className="bg-stone-50 border border-stone-200/80 rounded-2xl overflow-hidden shadow-xs hover:shadow-md transition-all">
                 <div className="relative w-full h-44 sm:h-48 bg-stone-200">
                   <img 
@@ -636,7 +633,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* KARTU 2: KURSI & MEJA BERSAMA */}
               <div className="bg-stone-50 border border-stone-200/80 rounded-2xl overflow-hidden shadow-xs hover:shadow-md transition-all">
                 <div className="relative w-full h-44 sm:h-48 bg-stone-200">
                   <img 
@@ -657,7 +653,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* KARTU 3: MESIN CUCI & JEMURAN */}
               <div className="bg-stone-50 border border-stone-200/80 rounded-2xl overflow-hidden shadow-xs hover:shadow-md transition-all">
                 <div className="relative w-full h-44 sm:h-48 bg-stone-200">
                   <img 
@@ -680,7 +675,6 @@ export default function Home() {
 
             </div>
 
-            {/* RINGKASAN AREA PARKIR */}
             <div className="p-3.5 sm:p-4 bg-stone-100/70 border border-stone-200/60 rounded-xl text-xs text-stone-600 flex items-center gap-2">
               <span className="font-semibold text-stone-800 shrink-0">Parkir Kendaraan:</span>
               <span className="text-stone-500">Tersedia area parkir aman untuk Motor, dan Sepeda.</span>
