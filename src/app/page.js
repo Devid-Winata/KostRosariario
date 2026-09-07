@@ -155,7 +155,7 @@ export default function Home() {
       size: '3 x 5 Meter',
       electricityNote: 'Listrik menggunakan token / meteran mandiri (biaya di luar harga sewa).',
       images: ['/nonac-1.webp', '/nonac-2.webp'],
-      specs: ['Kipas Angin', 'Kasur', 'Lemari / Storage', 'Jendela', 'Ventilasi', 'Bantal & Guling', 'Wastafel'],
+      specs: ['Kasur', 'Jendela', 'Ventilasi', 'Bantal & Guling', 'Wastafel'],
       bathroom: ['Kamar Mandi Dalam', 'Kloset Jongkok', 'Shower', 'Ember Mandi']
     },
     Lama: {
@@ -165,7 +165,7 @@ export default function Home() {
       electricityNote: 'Listrik menggunakan token / meteran mandiri (biaya di luar harga sewa).',
       images: ['/lama-1.webp', '/lama-2.webp'],
       specs: ['AC', 'Kasur', 'Kursi plastik', 'Jendela', 'Ventilasi'],
-      bathroom: ['Kamar Mandi Dalam', 'Kloset Jongkok', 'Ember Mandi', 'Wastafel dalam kamar']
+      bathroom: ['Kamar Mandi Dalam', 'Shower', 'Kloset Jongkok', 'Ember Mandi', 'Wastafel dalam kamar']
     }
   };
 
